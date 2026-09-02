@@ -1,1 +1,43 @@
+name: Windows Server 2019 RDP
 
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Enable RDP
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+
+      - name: Set Password
+        run: |
+          net user runneradmin Password12345!
+
+      - name: Setup Tailscale
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale.exe"
+          Start-Process -FilePath ".\tailscale.exe" -ArgumentList "/quiet" -Wait
+          $env:Path += ";C:\Program Files\Tailscale"
+          tailscale up --authkey=$env:TAILSCALE_AUTHKEY --hostname=github-win2019
+
+      - name: Show Connection IP
+        run: |
+          $env:Path += ";C:\Program Files\Tailscale"
+          $ip = tailscale ip -4
+          Write-Host "=========================================="
+          Write-Host "KẾT NỐI RDP QUA IP: $ip"
+          Write-Host "User: runneradmin | Pass: Password12345!"
+          Write-Host "=========================================="
+
+      - name: Keep Alive
+        run: |
+          $i = 0
+          while ($i -lt 360) {
+            Start-Sleep -Seconds 60
+            $i++
+          }
