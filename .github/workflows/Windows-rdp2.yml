@@ -23,7 +23,7 @@ jobs:
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale.exe"
           Start-Process -FilePath ".\tailscale.exe" -ArgumentList "/quiet" -Wait
           $env:Path += ";C:\Program Files\Tailscale"
-          tailscale up --authkey=$env:TAILSCALE_AUTHKEY --hostname=github-win2019
+          tailscale up --authkey=$env:TAILSCALE_AUTHKEY --hostname=github-win2025
 
       - name: Show Connection IP
         run: |
@@ -37,7 +37,14 @@ jobs:
       - name: Keep Alive
         run: |
           $i = 0
-          while ($i -lt 360) {
+          while ($i -lt 350) {
             Start-Sleep -Seconds 60
             $i++
           }
+
+      - name: Auto Trigger Next Workflow
+        if: always()
+        run: |
+          gh workflow run windows-rdp.yml --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
