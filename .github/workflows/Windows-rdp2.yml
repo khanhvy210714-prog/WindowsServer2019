@@ -1,10 +1,10 @@
-name: Windows Server 2016 RDP
+name: Windows Server 2025 RDP
 
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-2012
+    runs-on: windows-2025-vs2026
     steps:
       - name: Enable RDP
         run: |
