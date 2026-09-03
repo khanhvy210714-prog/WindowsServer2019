@@ -6,6 +6,9 @@ jobs:
   build:
     runs-on: windows-2025-vs2026
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Enable RDP
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
@@ -23,11 +26,12 @@ jobs:
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale.exe"
           Start-Process -FilePath ".\tailscale.exe" -ArgumentList "/quiet" -Wait
           $env:Path += ";C:\Program Files\Tailscale"
-          tailscale up --authkey=$env:TAILSCALE_AUTHKEY --hostname=github-win2025
+          tailscale up --authkey=$env:TAILSCALE_AUTHKEY --hostname=github-win2025 --accept-routes
 
       - name: Show Connection IP
         run: |
           $env:Path += ";C:\Program Files\Tailscale"
+          Start-Sleep -Seconds 5
           $ip = tailscale ip -4
           Write-Host "=========================================="
           Write-Host "KẾT NỐI RDP QUA IP: $ip"
