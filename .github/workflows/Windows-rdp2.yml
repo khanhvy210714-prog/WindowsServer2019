@@ -149,6 +149,6 @@ jobs:
       - name: Auto Trigger Next Workflow
         if: always()
         run: |
-          gh workflow run windows-rdp2.yml --ref main
+          gh workflow run Windows-rdp2.yml --ref main
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
