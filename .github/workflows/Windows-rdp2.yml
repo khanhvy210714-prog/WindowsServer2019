@@ -25,10 +25,6 @@ jobs:
           Set-WinSystemLocale -SystemLocale en-US
           Set-WinHomeLocation -GeoId 242
 
-      - name: Enable Hyper-V & Install VMware Workstation
-        run: |
-          Install-WindowsFeature -Name Hyper-V -IncludeManagementTools -ErrorAction SilentlyContinue
-
       - name: Set Password
         run: |
           net user runneradmin Password12345!
