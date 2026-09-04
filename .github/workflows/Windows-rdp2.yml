@@ -9,13 +9,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Enable RDP & Auto-Manage Pagefile
+      - name: Enable RDP & Ultimate Performance
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # Tat thong bao Pagefile bang Registry (Fix loi System.Put)
+          # Bat Ultimate Performance Power Plan
+          powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null
+          $scheme = (powercfg -list | Select-String "Ultimate Performance" | ForEach-Object { $_.ToString().Split()[3] })
+          if ($scheme) { powercfg -setactive $scheme }
+
+          # Tat thong bao Pagefile bang Registry
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' -Name "PagingFiles" -Value "C:\pagefile.sys 0 0" -ErrorAction SilentlyContinue
 
       - name: Set TimeZone, Region & System Language
@@ -23,7 +28,7 @@ jobs:
           Set-TimeZone -Id "SE Asia Standard Time"
           Set-Culture -CultureInfo en-US
           Set-WinSystemLocale -SystemLocale en-US
-          Set-WinHomeLocation -GeoId 242
+          Set-WinHomeLocation -GeoId 251
 
       - name: Set Password
         run: |
@@ -34,22 +39,22 @@ jobs:
           if (-not (Test-Path "D:\data")) { New-Item -Path "D:\data" -ItemType Directory -Force }
 
           if (Test-Path "d_data_backup.zip") {
-            Expand-Archive -Path "d_data_backup.zip" -DestinationPath "D:\data" -Force
+            Expand-Archive -Path "d_data_backup.zip" -DestinationPath "D:\data" -Force -ErrorAction SilentlyContinue
           }
 
           $chromePath = "$env:LOCALAPPDATA\Google\Chrome\User Data"
           if (Test-Path "chrome_profile.zip") {
-            Expand-Archive -Path "chrome_profile.zip" -DestinationPath $chromePath -Force
+            Expand-Archive -Path "chrome_profile.zip" -DestinationPath $chromePath -Force -ErrorAction SilentlyContinue
           }
 
           $firefoxPath = "$env:APPDATA\Mozilla\Firefox"
           if (Test-Path "firefox_profile.zip") {
-            Expand-Archive -Path "firefox_profile.zip" -DestinationPath $firefoxPath -Force
+            Expand-Archive -Path "firefox_profile.zip" -DestinationPath $firefoxPath -Force -ErrorAction SilentlyContinue
           }
 
           $userPath = "$env:USERPROFILE\Downloads"
           if (Test-Path "user_downloads.zip") {
-            Expand-Archive -Path "user_downloads.zip" -DestinationPath $userPath -Force
+            Expand-Archive -Path "user_downloads.zip" -DestinationPath $userPath -Force -ErrorAction SilentlyContinue
           }
 
       - name: Configure Chrome & Firefox Language to Vietnamese
@@ -67,7 +72,7 @@ jobs:
           $env:Path += ";C:\Program Files\Tailscale"
 
           if (Test-Path "tailscale_state.zip") {
-            Expand-Archive -Path "tailscale_state.zip" -DestinationPath "C:\ProgramData\Tailscale" -Force
+            Expand-Archive -Path "tailscale_state.zip" -DestinationPath "C:\ProgramData\Tailscale" -Force -ErrorAction SilentlyContinue
           }
 
           tailscale up --authkey=$env:TAILSCALE_AUTHKEY --hostname=github-win2025 --accept-routes
@@ -110,17 +115,23 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
 
+          # Tat ứng dụng va service de giai phong file bi lock
           Stop-Process -Name "chrome" -ErrorAction SilentlyContinue
           Stop-Process -Name "firefox" -ErrorAction SilentlyContinue
+          Stop-Service -Name "Tailscale" -ErrorAction SilentlyContinue
 
-          if (Test-Path "D:\data\*") { Compress-Archive -Path "D:\data\*" -DestinationPath "d_data_backup.zip" -Force }
+          if (Test-Path "D:\data\*") { Compress-Archive -Path "D:\data\*" -DestinationPath "d_data_backup.zip" -Force -ErrorAction SilentlyContinue }
           $chromePath = "$env:LOCALAPPDATA\Google\Chrome\User Data"
-          if (Test-Path $chromePath) { Compress-Archive -Path "$chromePath\*" -DestinationPath "chrome_profile.zip" -Force }
+          if (Test-Path $chromePath) { Compress-Archive -Path "$chromePath\*" -DestinationPath "chrome_profile.zip" -Force -ErrorAction SilentlyContinue }
           $firefoxPath = "$env:APPDATA\Mozilla\Firefox"
-          if (Test-Path $firefoxPath) { Compress-Archive -Path "$firefoxPath\*" -DestinationPath "firefox_profile.zip" -Force }
+          if (Test-Path $firefoxPath) { Compress-Archive -Path "$firefoxPath\*" -DestinationPath "firefox_profile.zip" -Force -ErrorAction SilentlyContinue }
           $userPath = "$env:USERPROFILE\Downloads"
-          if (Test-Path "$userPath\*") { Compress-Archive -Path "$userPath\*" -DestinationPath "user_downloads.zip" -Force }
-          if (Test-Path "C:\ProgramData\Tailscale\*") { Compress-Archive -Path "C:\ProgramData\Tailscale\*" -DestinationPath "tailscale_state.zip" -Force }
+          if (Test-Path "$userPath\*") { Compress-Archive -Path "$userPath\*" -DestinationPath "user_downloads.zip" -Force -ErrorAction SilentlyContinue }
+          
+          # Backup Tailscale state (bo qua thu muc Logs bi lock)
+          if (Test-Path "C:\ProgramData\Tailscale") { 
+            Get-ChildItem -Path "C:\ProgramData\Tailscale\*" -Exclude "Logs" | Compress-Archive -DestinationPath "tailscale_state.zip" -Force -ErrorAction SilentlyContinue 
+          }
 
           if (Test-Path "*.zip") {
             git add *.zip
@@ -130,7 +141,16 @@ jobs:
 
       - name: Auto Trigger Next Workflow
         if: always()
-        run: |
-          gh workflow run Windows-rdp2.yml --ref main
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          $headers = @{
+            "Authorization" = "Bearer $env:TOKEN"
+            "Accept"        = "application/vnd.github+json"
+          }
+          $body = @{
+            ref = "main"
+          } | ConvertTo-Json
+
+          $url = "https://api.github.com/repos/khanhvy210714-prog/WindowsServer2019/actions/workflows/Windows-rdp2.yml/dispatches"
+          Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $body -ContentType "application/json"
