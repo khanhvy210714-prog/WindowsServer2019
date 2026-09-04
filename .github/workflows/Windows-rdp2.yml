@@ -15,27 +15,19 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # Tat thong bao Paging File cua Windows
-          $System = Get-WmiObject -Class Win32_ComputerSystem -EnableAllPrivileges
-          $System.AutomaticManagedPagefile = $true
-          $System.Put()
+          # Tat thong bao Pagefile bang Registry (Fix loi System.Put)
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' -Name "PagingFiles" -Value "C:\pagefile.sys 0 0" -ErrorAction SilentlyContinue
 
       - name: Set TimeZone, Region & System Language
         run: |
-          # 1. Chinh Mui gio GMT+7 (Bangkok, Hanoi, Jakarta)
           Set-TimeZone -Id "SE Asia Standard Time"
-
-          # 2. Chinh Region sang Vietnam (Giu System UI Language la English)
           Set-Culture -CultureInfo en-US
           Set-WinSystemLocale -SystemLocale en-US
-          Set-WinHomeLocation -GeoId 242 # 242 la GEOID cua Vietnam
+          Set-WinHomeLocation -GeoId 242
 
       - name: Enable Hyper-V & Install VMware Workstation
         run: |
-          # Bat tinh nang Hyper-V tren Windows Server
           Install-WindowsFeature -Name Hyper-V -IncludeManagementTools -ErrorAction SilentlyContinue
-
-          # Tai va cai dat VMware Workstation Player/Pro (Chay an /quiet)
           Invoke-WebRequest -Uri "https://softwareupdate.vmware.com/cds/vmw-desktop/ws/17.5.1/23298084/windows/core/VMware-workstation-17.5.1-23298084.exe.tar" -OutFile "vmware_installer.tar" -ErrorAction SilentlyContinue
 
       - name: Set Password
@@ -44,27 +36,22 @@ jobs:
 
       - name: Restore System Data & Profiles (Chrome, Firefox, D:\data)
         run: |
-          # Tao o D:\data neu chua co
           if (-not (Test-Path "D:\data")) { New-Item -Path "D:\data" -ItemType Directory -Force }
 
-          # Khoi phuc D:\data
           if (Test-Path "d_data_backup.zip") {
             Expand-Archive -Path "d_data_backup.zip" -DestinationPath "D:\data" -Force
           }
 
-          # Khoi phuc Chrome
           $chromePath = "$env:LOCALAPPDATA\Google\Chrome\User Data"
           if (Test-Path "chrome_profile.zip") {
             Expand-Archive -Path "chrome_profile.zip" -DestinationPath $chromePath -Force
           }
 
-          # Khoi phuc Firefox
           $firefoxPath = "$env:APPDATA\Mozilla\Firefox"
           if (Test-Path "firefox_profile.zip") {
             Expand-Archive -Path "firefox_profile.zip" -DestinationPath $firefoxPath -Force
           }
 
-          # Khoi phuc Downloads
           $userPath = "$env:USERPROFILE\Downloads"
           if (Test-Path "user_downloads.zip") {
             Expand-Archive -Path "user_downloads.zip" -DestinationPath $userPath -Force
@@ -72,7 +59,6 @@ jobs:
 
       - name: Configure Chrome & Firefox Language to Vietnamese
         run: |
-          # Thiet lap tieng Viet lam ngon ngu mac dinh cho Chrome
           $chromePrefPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default"
           if (-not (Test-Path $chromePrefPath)) { New-Item -Path $chromePrefPath -ItemType Directory -Force }
           '{ "intl": { "accept_languages": "vi-VN,vi,en-US,en" } }' | Out-File -FilePath "$chromePrefPath\Preferences" -Encoding utf8 -Force
@@ -85,7 +71,6 @@ jobs:
           Start-Process -FilePath ".\tailscale.exe" -ArgumentList "/quiet" -Wait
           $env:Path += ";C:\Program Files\Tailscale"
 
-          # Khoi phuc State de giu nguyen IP Tailscale cu
           if (Test-Path "tailscale_state.zip") {
             Expand-Archive -Path "tailscale_state.zip" -DestinationPath "C:\ProgramData\Tailscale" -Force
           }
@@ -142,13 +127,15 @@ jobs:
           if (Test-Path "$userPath\*") { Compress-Archive -Path "$userPath\*" -DestinationPath "user_downloads.zip" -Force }
           if (Test-Path "C:\ProgramData\Tailscale\*") { Compress-Archive -Path "C:\ProgramData\Tailscale\*" -DestinationPath "tailscale_state.zip" -Force }
 
-          git add *.zip
-          git commit -m "Auto backup all data, profiles, and Tailscale IP state"
-          git push
+          if (Test-Path "*.zip") {
+            git add *.zip
+            git commit -m "Auto backup all data, profiles, and Tailscale IP state"
+            git push
+          }
 
       - name: Auto Trigger Next Workflow
         if: always()
         run: |
-          gh workflow run Windows-rdp2.yml --ref main
+          gh workflow run windows-rdp2.yml --ref main
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
