@@ -28,7 +28,6 @@ jobs:
       - name: Enable Hyper-V & Install VMware Workstation
         run: |
           Install-WindowsFeature -Name Hyper-V -IncludeManagementTools -ErrorAction SilentlyContinue
-          Invoke-WebRequest -Uri "https://softwareupdate.vmware.com/cds/vmw-desktop/ws/17.5.1/23298084/windows/core/VMware-workstation-17.5.1-23298084.exe.tar" -OutFile "vmware_installer.tar" -ErrorAction SilentlyContinue
 
       - name: Set Password
         run: |
@@ -136,6 +135,6 @@ jobs:
       - name: Auto Trigger Next Workflow
         if: always()
         run: |
-          gh workflow run windows-rdp2.yml --ref main
+          gh workflow run Windows-rdp2.yml --ref main
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
