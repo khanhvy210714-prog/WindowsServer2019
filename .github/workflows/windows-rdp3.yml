@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2022-vs2026
+    runs-on: windows-2022
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -16,12 +16,10 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # Bat Ultimate Performance Power Plan
           powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null
           $scheme = (powercfg -list | Select-String "Ultimate Performance" | ForEach-Object { $_.ToString().Split()[3] })
           if ($scheme) { powercfg -setactive $scheme }
 
-          # Tat thong bao Pagefile
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' -Name "PagingFiles" -Value "C:\pagefile.sys 0 0" -ErrorAction SilentlyContinue
 
       - name: Set TimeZone, Region & System Language
@@ -114,12 +112,12 @@ jobs:
           if (Test-Path "*_2022.zip") {
             git add *_2022.zip
             git commit -m "Auto backup Win2022 data"
-            git push
+            git push || true
           }
 
       - name: Auto Trigger Next Workflow
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run "windows-server-2022.yml" --repo "khanhvy210714-prog/WindowsServer2019" --ref main
+          gh workflow run "windows-rdp3.yml" --repo "khanhvy210714-prog/WindowsServer2019" --ref main || true
