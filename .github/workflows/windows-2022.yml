@@ -119,15 +119,6 @@ jobs:
       - name: Auto Trigger Next Workflow
         if: always()
         env:
-          TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          $headers = @{
-            "Authorization" = "Bearer $env:TOKEN"
-            "Accept"        = "application/vnd.github+json"
-          }
-          $body = @{
-            ref = "main"
-          } | ConvertTo-Json
-
-          $url = "https://api.github.com/repos/khanhvy210714-prog/WindowsServer2019/actions/workflows/windows-2022.yml/dispatches"
-          Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $body -ContentType "application/json"
+          gh workflow run "windows-2022.yml" --repo "khanhvy210714-prog/WindowsServer2019" --ref main
