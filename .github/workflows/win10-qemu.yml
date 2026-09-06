@@ -1,4 +1,4 @@
-Name: Windows 10 22H2 QEMU UEFI on Ubuntu
+name: Windows 10 22H2 QEMU UEFI on Ubuntu
 
 on:
   workflow_dispatch:
