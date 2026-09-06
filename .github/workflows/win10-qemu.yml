@@ -1,0 +1,122 @@
+name: Windows 10 22H2 QEMU UEFI on Ubuntu
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-win10:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install QEMU, OVMF (UEFI Firmware) & Tailscale
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf wget curl
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Setup Tailscale
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --hostname=github-ubuntu-qemu --accept-routes
+
+      - name: Restore System Disk & Tailscale State
+        run: |
+          if [ -f "tailscale_state.tar.gz" ]; then
+            sudo systemctl stop tailscaled || true
+            sudo tar -xzf tailscale_state.tar.gz -C /var/lib/tailscale/
+            sudo systemctl start tailscaled || true
+          fi
+
+          if [ -f "win10_disk.tar.gz" ]; then
+            echo "Đang khôi phục đĩa Win 10 từ backup..."
+            tar -xzf win10_disk.tar.gz
+          else
+            echo "Khởi tạo đĩa QCOW2 100GB mới..."
+            qemu-img create -f qcow2 win10.qcow2 100G
+          fi
+
+      - name: Download Windows 10 22H2 ISO
+        run: |
+          if [ ! -f "win10.qcow2" ]; then
+            qemu-img create -f qcow2 win10.qcow2 100G
+          fi
+          
+          if [ ! -f "win10_installed.flag" ]; then
+            echo "Đang tải ISO Windows 10 22H2..."
+            wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso?t=13450ee3-12e3-45ba-b213-6ce9d19e1913&P1=1788761572&P2=602&P3=2&P4=jnDEJyyOilP0WZ%2fZLUYHkx%2fL9r2J5yh%2bTWOhDcKfhZTs%2bz2SUGufrotRlcLlyMLfeF5NoR182Xu1xZK%2b%2f9FTFRfaaYD5QY9gFWKxOELFsKtOahP1ZSPS7crxMIIn6d6I%2be0tOpbnp1WWSxirYrotfxHaob2NDx0fvxMI9mxcgD%2bmds056R1WM5ocIQxQfXt%2be%2f0duktjM7Kj3g%2fb5KaofxoGND9f%2fMosk3GwTqzjuOZdIaB0Jtjukkviv9S8KqMbChNKsL42bjrxRCTKjQX3YR7xp7CNE7x3bITyYaiTSw0PcWbKWJT9dXvNC6u6h%2bJip3EFZ7%2f5TzTmtX6lL3%2bBnA%3d%3d"
+          fi
+
+      - name: Launch QEMU Windows 10 (UEFI Mode, 8GB RAM, SATA, KVM, VNC :5900)
+        run: |
+          CDROM_ARG=""
+          if [ -f "win10.iso" ]; then
+            CDROM_ARG="-cdrom win10.iso"
+          fi
+
+          # Chạy QEMU với UEFI BIOS (OVMF)
+          sudo qemu-system-x86_64 \
+            -enable-kvm \
+            -cpu host \
+            -smp 4 \
+            -m 8192 \
+            -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd \
+            -drive file=win10.qcow2,format=qcow2,bus=sata \
+            $CDROM_ARG \
+            -net nic,model=e1000 \
+            -net user,hostfwd=tcp::3389-:3389 \
+            -vnc :0 \
+            -daemonize
+
+      - name: Show Connection Info
+        run: |
+          sleep 5
+          tailscale_ip=$(tailscale ip -4)
+          echo "=========================================="
+          echo "IP TAILSCALE UBUNTU HOST: $tailscale_ip"
+          echo "KẾT NỐI VNC SETUP (UEFI BIOS): $tailscale_ip:5900"
+          echo "KẾT NỐI RDP (Khi cài xong): $tailscale_ip:3389"
+          echo "=========================================="
+
+      - name: Keep Alive (350 phut)
+        run: |
+          i=0
+          while [ $i -lt 350 ]; do
+            sleep 60
+            i=$((i+1))
+          done
+
+      - name: Backup Disk & Tailscale State Before Shutdown
+        if: always()
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+          sudo pkill -f qemu-system-x86_64 || true
+          sleep 5
+
+          if [ -f "win10.qcow2" ]; then
+            tar -czf win10_disk.tar.gz win10.qcow2
+          fi
+
+          if [ -d "/var/lib/tailscale" ]; then
+            sudo tar -czf tailscale_state.tar.gz -C /var/lib/tailscale/ .
+          fi
+
+          if [ -f "win10_disk.tar.gz" ]; then
+            git add win10_disk.tar.gz tailscale_state.tar.gz win10_installed.flag || true
+            git commit -m "Auto backup Win10 UEFI QEMU Disk" || true
+            git push || true
+          fi
+
+      - name: Auto Trigger Next Workflow
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run "win10-qemu.yml" --repo "khanhvy210714-prog/WindowsServer2019" --ref main || true
