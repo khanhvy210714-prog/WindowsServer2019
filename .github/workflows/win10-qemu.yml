@@ -13,10 +13,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install QEMU, OVMF & Tailscale
+      - name: Install Desktop, QEMU, OVMF, VNC Server & Tailscale
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf wget curl
+          sudo apt-get install -y xfce4 xfce4-goodies x11vnc xvfb qemu-system-x86 qemu-utils ovmf wget curl
           curl -fsSL https://tailscale.com/install.sh | sh
 
       - name: Setup Tailscale
@@ -24,6 +24,20 @@ jobs:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
           sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --hostname=github-ubuntu-qemu --accept-routes
+
+      - name: Launch Ubuntu Desktop VNC Server (:0 - Port 5900)
+        run: |
+          # Tạo màn hình ảo Xvfb cho Ubuntu Host
+          Xvfb :0 -screen 0 1280x720x24 > /dev/null 2>&1 &
+          sleep 2
+          
+          # Chạy giao diện XFCE4
+          DISPLAY=:0 startxfce4 > /dev/null 2>&1 &
+          sleep 2
+          
+          # Chạy VNC Server cho Ubuntu Desktop ở port 5900 (:0)
+          x11vnc -display :0 -forever -shared -rfbport 5900 -nopw > /dev/null 2>&1 &
+          sleep 2
 
       - name: Restore System Disk & Tailscale State
         run: |
@@ -52,32 +66,33 @@ jobs:
             wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso?t=13450ee3-12e3-45ba-b213-6ce9d19e1913&P1=1788761572&P2=602&P3=2&P4=jnDEJyyOilP0WZ%2fZLUYHkx%2fL9r2J5yh%2bTWOhDcKfhZTs%2bz2SUGufrotRlcLlyMLfeF5NoR182Xu1xZK%2b%2f9FTFRfaaYD5QY9gFWKxOELFsKtOahP1ZSPS7crxMIIn6d6I%2be0tOpbnp1WWSxirYrotfxHaob2NDx0fvxMI9mxcgD%2bmds056R1WM5ocIQxQfXt%2be%2f0duktjM7Kj3g%2fb5KaofxoGND9f%2fMosk3GwTqzjuOZdIaB0Jtjukkviv9S8KqMbChNKsL42bjrxRCTKjQX3YR7xp7CNE7x3bITyYaiTSw0PcWbKWJT9dXvNC6u6h%2bJip3EFZ7%2f5TzTmtX6lL3%2bBnA%3d%3d"
           fi
 
-      - name: Launch QEMU Windows 10 (UEFI Mode, 8GB RAM, SATA, KVM, VNC :5900)
+      - name: Launch QEMU Windows 10 (:1 - Port 5901)
         run: |
           CDROM_ARG=""
           if [ -f "win10.iso" ]; then
-            CDROM_ARG="-cdrom win10.iso"
+            CDROM_ARG="-drive file=win10.iso,media=cdrom,if=none,id=cdrom0 -device ide-cd,bus=ahci0.1,drive=cdrom0"
           fi
 
-          # Tự động tìm đường dẫn file OVMF_CODE chuẩn trên hệ thống
-          OVMF_PATH=$(find /usr/share -name "OVMF_CODE*.fd" | head -n 1)
-          echo "Tìm thấy UEFI Firmware tại: $OVMF_PATH"
+          OVMF_PATH=$(ls /usr/share/OVMF/OVMF_CODE*.fd | head -n 1)
 
-          # Chạy QEMU với UEFI tìm được
+          # Chạy QEMU gán vào VNC Display :1 (Port 5901)
           sudo qemu-system-x86_64 \
             -enable-kvm \
             -cpu host \
             -smp 4 \
             -m 8192 \
-            -drive if=pflash,format=raw,readonly=on,file="$OVMF_PATH" \
-            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 \
+            -drive if=pflash,format=raw,readonly=on,file=$OVMF_PATH \
             -device ahci,id=ahci0 \
+            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 \
             -device ide-hd,bus=ahci0.0,drive=hda0 \
             $CDROM_ARG \
             -net nic,model=e1000 \
             -net user,hostfwd=tcp::3389-:3389 \
-            -vnc :0 \
-            -daemonize
+            -vnc 0.0.0.0:1 \
+            -audiodev none,id=noaudio \
+            -machine pcspk-audiodev=noaudio > /dev/null 2>&1 &
+            
+          sleep 3
 
       - name: Show Connection Info
         run: |
@@ -85,8 +100,9 @@ jobs:
           tailscale_ip=$(tailscale ip -4)
           echo "=========================================="
           echo "IP TAILSCALE UBUNTU HOST: $tailscale_ip"
-          echo "KẾT NỐI VNC SETUP (UEFI BIOS): $tailscale_ip:5900"
-          echo "KẾT NỐI RDP (Khi cài xong): $tailscale_ip:3389"
+          echo "1. VNC UBUNTU DESKTOP: $tailscale_ip:5900 (hoặc $tailscale_ip:0)"
+          echo "2. VNC QEMU WIN 10:    $tailscale_ip:5901 (hoặc $tailscale_ip:1)"
+          echo "3. RDP WINDOWS 10:     $tailscale_ip:3389"
           echo "=========================================="
 
       - name: Keep Alive (350 phut)
@@ -110,18 +126,12 @@ jobs:
             tar -czf win10_disk.tar.gz win10.qcow2
           fi
 
-          if [ -d "/var/lib/tailscale" ]; then
+          if [ -f "/var/lib/tailscale/tailscaled.state" ]; then
             sudo tar -czf tailscale_state.tar.gz -C /var/lib/tailscale/ .
           fi
 
-          # Chỉ git add những file thực sự tồn tại
-          FILES_TO_ADD=""
-          [ -f "win10_disk.tar.gz" ] && FILES_TO_ADD="$FILES_TO_ADD win10_disk.tar.gz"
-          [ -f "tailscale_state.tar.gz" ] && FILES_TO_ADD="$FILES_TO_ADD tailscale_state.tar.gz"
-          [ -f "win10_installed.flag" ] && FILES_TO_ADD="$FILES_TO_ADD win10_installed.flag"
-
-          if [ -n "$FILES_TO_ADD" ]; then
-            git add $FILES_TO_ADD
+          if [ -f "win10_disk.tar.gz" ]; then
+            git add win10_disk.tar.gz tailscale_state.tar.gz win10_installed.flag || true
             git commit -m "Auto backup Win10 UEFI QEMU Disk" || true
             git push || true
           fi
