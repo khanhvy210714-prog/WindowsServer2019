@@ -13,7 +13,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install QEMU, OVMF (UEFI Firmware) & Tailscale
+      - name: Install QEMU, OVMF & Tailscale
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils ovmf wget curl
@@ -59,13 +59,17 @@ jobs:
             CDROM_ARG="-cdrom win10.iso"
           fi
 
-          # Chạy QEMU với UEFI BIOS (OVMF)
+          # Tự động tìm đường dẫn file OVMF_CODE chuẩn trên hệ thống
+          OVMF_PATH=$(find /usr/share -name "OVMF_CODE*.fd" | head -n 1)
+          echo "Tìm thấy UEFI Firmware tại: $OVMF_PATH"
+
+          # Chạy QEMU với UEFI tìm được
           sudo qemu-system-x86_64 \
             -enable-kvm \
             -cpu host \
             -smp 4 \
             -m 8192 \
-            -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd \
+            -drive if=pflash,format=raw,readonly=on,file="$OVMF_PATH" \
             -drive file=win10.qcow2,format=qcow2,bus=sata \
             $CDROM_ARG \
             -net nic,model=e1000 \
@@ -108,8 +112,14 @@ jobs:
             sudo tar -czf tailscale_state.tar.gz -C /var/lib/tailscale/ .
           fi
 
-          if [ -f "win10_disk.tar.gz" ]; then
-            git add win10_disk.tar.gz tailscale_state.tar.gz win10_installed.flag || true
+          # Chỉ git add những file thực sự tồn tại
+          FILES_TO_ADD=""
+          [ -f "win10_disk.tar.gz" ] && FILES_TO_ADD="$FILES_TO_ADD win10_disk.tar.gz"
+          [ -f "tailscale_state.tar.gz" ] && FILES_TO_ADD="$FILES_TO_ADD tailscale_state.tar.gz"
+          [ -f "win10_installed.flag" ] && FILES_TO_ADD="$FILES_TO_ADD win10_installed.flag"
+
+          if [ -n "$FILES_TO_ADD" ]; then
+            git add $FILES_TO_ADD
             git commit -m "Auto backup Win10 UEFI QEMU Disk" || true
             git push || true
           fi
