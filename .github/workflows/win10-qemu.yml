@@ -70,7 +70,9 @@ jobs:
             -smp 4 \
             -m 8192 \
             -drive if=pflash,format=raw,readonly=on,file="$OVMF_PATH" \
-            -drive file=win10.qcow2,format=qcow2,bus=sata \
+            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 \
+            -device ahci,id=ahci0 \
+            -device ide-hd,bus=ahci0.0,drive=hda0 \
             $CDROM_ARG \
             -net nic,model=e1000 \
             -net user,hostfwd=tcp::3389-:3389 \
