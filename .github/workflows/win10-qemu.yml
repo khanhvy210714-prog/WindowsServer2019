@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-win10:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -36,7 +36,6 @@ jobs:
 
       - name: Restore System Disk
         run: |
-          # Ghép lại các file đĩa bị chia nhỏ nếu có bản backup
           if ls win10_disk.tar.gz.part* 1> /dev/null 2>&1; then
             echo "Đang ghép và khôi phục đĩa Win 10 từ backup..."
             cat win10_disk.tar.gz.part* > win10_disk.tar.gz
@@ -50,7 +49,7 @@ jobs:
 
       - name: Download Windows 10 ISO (Chỉ tải nếu chưa cài)
         run: |
-          if [ ! -f "win10_installed.flag" ] ; then
+          if [ ! -f "win10_installed.flag" ]; then
             echo "Đang tải ISO Windows 10 22H2..."
             wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_EnglishInternational_x64v1.iso?t=6f91b7b9-1478-44ff-a2bc-634b420ffa0f&P1=1788860392&P2=602&P3=2&P4=J80gTn3%2fJTQOtPF1ToKk0iQIurYfYEptAdeV6k8iemU%2bMTqBKP0LZbtZRy81GkMUCoeVQjvpPrBlOk6PS0LgyJU4AAyQtPePtOxyra4TkAyx1%2bhgP%2bRQ0GJOhSado25Uriws3HUq4wInDXbU4LhttRGg2X8c0xxCpKRnO2uMibeT9KUa2J6oxjAFcslpCuf7y1CIyZkEdJMEWeyCr7mmC4tHynfwREL%2fFNQZYz4sLhdAY18C2jX3ZAXQ7qJwujggKrJ6rUsZd33llmMpG5T1sqUJ1FNOqNbXP2UoUTo8HPii0CE%2fj8oSDNA36Tt0LoGAHKdzr%2b9WPF%2bJ1pc24Mzyvg%3d%3d"
           fi
@@ -58,14 +57,21 @@ jobs:
       - name: Launch QEMU Windows 10 (:1 - Port 5901)
         run: |
           CDROM_ARG=""
-          if [ -f "win10.iso" ] && [ ! -f "win10_installed.flag" ]; then
+          BOOT_ARG=""
+
+          if [ ! -f "win10_installed.flag" ] && [ -f "win10.iso" ]; then
+            echo "Chưa có flag: Ép Boot từ ISO..."
             CDROM_ARG="-drive file=win10.iso,media=cdrom,if=none,id=cdrom0 -device ide-cd,bus=ahci0.1,drive=cdrom0"
+            BOOT_ARG="-boot order=d,menu=on"
+          else
+            echo "Đã cài xong: Boot từ đĩa cứng..."
+            BOOT_ARG="-boot order=c"
           fi
 
           OVMF_PATH=$(ls /usr/share/OVMF/OVMF_CODE*.fd /usr/share/ovmf/OVMF*.fd 2>/dev/null | head -n 1)
 
           sudo qemu-system-x86_64 \
-            -enable-kvm -cpu max -smp 4 -m 8192 -vga virtio -boot order=d,menu=on \
+            -enable-kvm -cpu max -smp 4 -m 8192 -vga virtio $BOOT_ARG \
             -drive if=pflash,format=raw,readonly=on,file=$OVMF_PATH \
             -device ahci,id=ahci0 \
             -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 -device ide-hd,bus=ahci0.0,drive=hda0 \
@@ -88,7 +94,6 @@ jobs:
 
       - name: Keep Alive & Auto-Backup
         run: |
-          # Cho máy chạy 300 phút (~5 tiếng), sau đó tự ngắt để backup và trigger lại
           sleep 18000
 
       - name: Backup Disk Before Runner Expires
