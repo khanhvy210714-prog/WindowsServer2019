@@ -23,7 +23,7 @@ jobs:
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --hostname=github-ubuntu-qemu --accept-routes
+          sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --hostname=github-ubuntu-qemu --accept-routes || true
 
       - name: Launch Ubuntu Desktop VNC Server (:0 - Port 5900)
         run: |
@@ -34,46 +34,30 @@ jobs:
           x11vnc -display :0 -forever -shared -rfbport 5900 -nopw > /dev/null 2>&1 &
           sleep 2
 
-      - name: Restore System Disk & Tailscale State
+      - name: Restore System Disk
         run: |
-          if [ -f "tailscale_state.tar.gz" ]; then
-            sudo systemctl stop tailscaled || true
-            sudo tar -xzf tailscale_state.tar.gz -C /var/lib/tailscale/
-            sudo systemctl start tailscaled || true
-          fi
-
-          # Ghép lại các file đĩa bị chia nhỏ nếu có
+          # Ghép lại các file đĩa bị chia nhỏ nếu có bản backup
           if ls win10_disk.tar.gz.part* 1> /dev/null 2>&1; then
             echo "Đang ghép và khôi phục đĩa Win 10 từ backup..."
             cat win10_disk.tar.gz.part* > win10_disk.tar.gz
             tar -xzf win10_disk.tar.gz
             touch win10_installed.flag
             rm -f win10_disk.tar.gz
-          elif [ -f "win10_disk.tar.gz" ]; then
-            echo "Đang khôi phục đĩa Win 10 từ file duy nhất..."
-            tar -xzf win10_disk.tar.gz
-            touch win10_installed.flag
           else
             echo "Chưa có backup, khởi tạo đĩa QCOW2 100GB mới..."
             qemu-img create -f qcow2 win10.qcow2 100G
           fi
 
-      - name: Download Windows 10 22H2 ISO
+      - name: Download Windows 10 ISO (Chỉ tải nếu chưa cài)
         run: |
-          # Kiểm tra nếu đã có đĩa hoặc đã cài xong thì KHÔNG tải ISO nữa
-          if [ -f "win10_installed.flag" ]; then
-            echo "Win 10 đã được cài đặt từ trước! Bỏ qua tải ISO."
-          else
-            if [ ! -f "win10.iso" ]; then
-              echo "Đang tải ISO Windows 10 22H2..."
-              wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso?t=13450ee3-12e3-45ba-b213-6ce9d19e1913&P1=1788761572&P2=602&P3=2&P4=jnDEJyyOilP0WZ%2fZLUYHkx%2fL9r2J5yh%2bTWOhDcKfhZTs%2bz2SUGufrotRlcLlyMLfeF5NoR182Xu1xZK%2b%2f9FTFRfaaYD5QY9gFWKxOELFsKtOahP1ZSPS7crxMIIn6d6I%2be0tOpbnp1WWSxirYrotfxHaob2NDx0fvxMI9mxcgD%2bmds056R1WM5ocIQxQfXt%2be%2f0duktjM7Kj3g%2fb5KaofxoGND9f%2fMosk3GwTqzjuOZdIaB0Jtjukkviv9S8KqMbChNKsL42bjrxRCTKjQX3YR7xp7CNE7x3bITyYaiTSw0PcWbKWJT9dXvNC6u6h%2bJip3EFZ7%2f5TzTmtX6lL3%2bBnA%3d%3d"
-            fi
+          if [ ! -f "win10_installed.flag" ] && [ ! -f "win10.iso" ]; then
+            echo "Đang tải ISO Windows 10 22H2..."
+            wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso?t=13450ee3-12e3-45ba-b213-6ce9d19e1913&P1=1788761572&P2=602&P3=2&P4=jnDEJyyOilP0WZ%2fZLUYHkx%2fL9r2J5yh%2bTWOhDcKfhZTs%2bz2SUGufrotRlcLlyMLfeF5NoR182Xu1xZK%2b%2f9FTFRfaaYD5QY9gFWKxOELFsKtOahP1ZSPS7crxMIIn6d6I%2be0tOpbnp1WWSxirYrotfxHaob2NDx0fvxMI9mxcgD%2bmds056R1WM5ocIQxQfXt%2be%2f0duktjM7Kj3g%2fb5KaofxoGND9f%2fMosk3GwTqzjuOZdIaB0Jtjukkviv9S8KqMbChNKsL42bjrxRCTKjQX3YR7xp7CNE7x3bITyYaiTSw0PcWbKWJT9dXvNC6u6h%2bJip3EFZ7%2f5TzTmtX6lL3%2bBnA%3d%3d"
           fi
 
       - name: Launch QEMU Windows 10 (:1 - Port 5901)
         run: |
           CDROM_ARG=""
-          # Chỉ mount ISO khi chưa cài xong Win 10
           if [ -f "win10.iso" ] && [ ! -f "win10_installed.flag" ]; then
             CDROM_ARG="-drive file=win10.iso,media=cdrom,if=none,id=cdrom0 -device ide-cd,bus=ahci0.1,drive=cdrom0"
           fi
@@ -81,31 +65,20 @@ jobs:
           OVMF_PATH=$(ls /usr/share/OVMF/OVMF_CODE*.fd /usr/share/ovmf/OVMF*.fd 2>/dev/null | head -n 1)
 
           sudo qemu-system-x86_64 \
-            -enable-kvm \
-            -cpu max \
-            -smp 4 \
-            -m 8192 \
-            -vga virtio \
-            -boot order=d,menu=on,strict=on \
+            -enable-kvm -cpu max -smp 4 -m 8192 -vga virtio -boot order=d,menu=on \
             -drive if=pflash,format=raw,readonly=on,file=$OVMF_PATH \
             -device ahci,id=ahci0 \
-            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 \
-            -device ide-hd,bus=ahci0.0,drive=hda0 \
+            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 -device ide-hd,bus=ahci0.0,drive=hda0 \
             $CDROM_ARG \
-            -device qemu-xhci,id=xhci \
-            -device usb-tablet,bus=xhci.0 \
-            -net nic,model=e1000 \
-            -net user,hostfwd=tcp::3389-:3389 \
-            -vnc 0.0.0.0:1 \
-            -audiodev none,id=noaudio \
-            -machine pcspk-audiodev=noaudio > /dev/null 2>&1 &
-            
+            -device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0 \
+            -net nic,model=e1000 -net user,hostfwd=tcp::3389-:3389 \
+            -vnc 0.0.0.0:1 > /dev/null 2>&1 &
           sleep 3
 
       - name: Show Connection Info
         run: |
           sleep 5
-          tailscale_ip=$(tailscale ip -4)
+          tailscale_ip=$(tailscale ip -4 || echo "Chưa kết nối Tailscale")
           echo "=========================================="
           echo "IP TAILSCALE UBUNTU HOST: $tailscale_ip"
           echo "1. VNC UBUNTU DESKTOP: $tailscale_ip:5900"
@@ -113,15 +86,12 @@ jobs:
           echo "3. RDP WINDOWS 10:     $tailscale_ip:3389"
           echo "=========================================="
 
-      - name: Keep Alive (350 phut)
+      - name: Keep Alive & Auto-Backup
         run: |
-          i=0
-          while [ $i -lt 350 ]; do
-            sleep 60
-            i=$((i+1))
-          done
+          # Cho máy chạy 300 phút (~5 tiếng), sau đó tự ngắt để backup và trigger lại
+          sleep 18000
 
-      - name: Backup Disk & Tailscale State Before Shutdown
+      - name: Backup Disk Before Runner Expires
         if: always()
         run: |
           git config --global user.name "GitHub Action"
@@ -130,26 +100,20 @@ jobs:
           sudo pkill -f qemu-system-x86_64 || true
           sleep 5
 
-          # Xóa các file chia nhỏ cũ trước khi đóng gói mới
           rm -f win10_disk.tar.gz*
 
           if [ -f "win10.qcow2" ]; then
             echo "Đang nén đĩa win10.qcow2..."
             tar -czf win10_disk.tar.gz win10.qcow2
-            echo "Đang chia nhỏ file nén thành từng phần 40MB để đẩy lên GitHub..."
+            echo "Đang chia nhỏ file nén thành 40MB..."
             split -b 40M win10_disk.tar.gz win10_disk.tar.gz.part
             rm -f win10_disk.tar.gz
           fi
 
-          if [ -f "/var/lib/tailscale/tailscaled.state" ]; then
-            sudo tar -czf tailscale_state.tar.gz -C /var/lib/tailscale/ .
-          fi
-
-          # Tự động tạo file đánh dấu win10_installed.flag nếu đĩa đã được ghi dữ liệu
           touch win10_installed.flag
 
-          git add win10_disk.tar.gz.part* tailscale_state.tar.gz win10_installed.flag || true
-          git commit -m "Auto backup Win10 Split QEMU Disk" || true
+          git add win10_disk.tar.gz.part* win10_installed.flag || true
+          git commit -m "Auto backup Win10 QEMU Disk" || true
           git push || true
 
       - name: Auto Trigger Next Workflow
