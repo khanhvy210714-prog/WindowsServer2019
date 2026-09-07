@@ -50,7 +50,7 @@ jobs:
 
       - name: Download Windows 10 ISO (Chỉ tải nếu chưa cài)
         run: |
-          if [ ! -f "win10_installed.flag" ] && [ ! -f "win10.iso" ]; then
+          if [ ! -f "win10_installed.flag" ] ; then
             echo "Đang tải ISO Windows 10 22H2..."
             wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_EnglishInternational_x64v1.iso?t=6f91b7b9-1478-44ff-a2bc-634b420ffa0f&P1=1788860392&P2=602&P3=2&P4=J80gTn3%2fJTQOtPF1ToKk0iQIurYfYEptAdeV6k8iemU%2bMTqBKP0LZbtZRy81GkMUCoeVQjvpPrBlOk6PS0LgyJU4AAyQtPePtOxyra4TkAyx1%2bhgP%2bRQ0GJOhSado25Uriws3HUq4wInDXbU4LhttRGg2X8c0xxCpKRnO2uMibeT9KUa2J6oxjAFcslpCuf7y1CIyZkEdJMEWeyCr7mmC4tHynfwREL%2fFNQZYz4sLhdAY18C2jX3ZAXQ7qJwujggKrJ6rUsZd33llmMpG5T1sqUJ1FNOqNbXP2UoUTo8HPii0CE%2fj8oSDNA36Tt0LoGAHKdzr%2b9WPF%2bJ1pc24Mzyvg%3d%3d"
           fi
