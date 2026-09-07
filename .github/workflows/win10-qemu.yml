@@ -1,14 +1,10 @@
 name: Windows 10 22H2 QEMU UEFI on Ubuntu
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+  workflow_dispatch: # Chỉ chạy khi bấm tay, tắt tự chạy khi push code
 
-# Tự động hủy job cũ nếu job mới được trigger, tránh bị nghẽn queue
 concurrency:
-  group: win10-qemu-group
+  group: win10-qemu-runner
   cancel-in-progress: true
 
 jobs:
@@ -123,12 +119,5 @@ jobs:
           touch win10_installed.flag
 
           git add win10_disk.tar.gz.part* win10_installed.flag || true
-          git commit -m "Auto backup Win10 QEMU Disk" || true
+          git commit -m "Auto backup Win10 QEMU Disk [skip ci]" || true
           git push || true
-
-      - name: Auto Trigger Next Workflow
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run "win10-qemu.yml" --repo "khanhvy210714-prog/WindowsServer2019" --ref main || true
