@@ -75,7 +75,7 @@ jobs:
             -enable-kvm -cpu max -smp 4 -m 8192 -vga virtio $BOOT_ARG \
             -drive if=pflash,format=raw,readonly=on,file=$OVMF_PATH \
             -device ahci,id=ahci0 \
-            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0 -device ide-hd,bus=ahci0.0,drive=hda0 \
+            -drive file=win10.qcow2,format=qcow2,if=none,id=hda0,discard=unmap,cache=unsafe,aio=threads,l2-cache-size=512M,detect-zeroes=on -device ide-hd,bus=ahci0.0,drive=hda0,rotation_rate=1 \
             $CDROM_ARG \
             -device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0 \
             -net nic,model=e1000 -net user,hostfwd=tcp::3389-:3389 \
