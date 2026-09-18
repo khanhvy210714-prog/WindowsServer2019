@@ -52,7 +52,7 @@ jobs:
         run: |
           if [ ! -f "win10_installed.flag" ]; then
             echo "Đang tải ISO Windows 10 22H2..."
-            wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_EnglishInternational_x64v1.iso?t=6f91b7b9-1478-44ff-a2bc-634b420ffa0f&P1=1788860392&P2=602&P3=2&P4=J80gTn3%2fJTQOtPF1ToKk0iQIurYfYEptAdeV6k8iemU%2bMTqBKP0LZbtZRy81GkMUCoeVQjvpPrBlOk6PS0LgyJU4AAyQtPePtOxyra4TkAyx1%2bhgP%2bRQ0GJOhSado25Uriws3HUq4wInDXbU4LhttRGg2X8c0xxCpKRnO2uMibeT9KUa2J6oxjAFcslpCuf7y1CIyZkEdJMEWeyCr7mmC4tHynfwREL%2fFNQZYz4sLhdAY18C2jX3ZAXQ7qJwujggKrJ6rUsZd33llmMpG5T1sqUJ1FNOqNbXP2UoUTo8HPii0CE%2fj8oSDNA36Tt0LoGAHKdzr%2b9WPF%2bJ1pc24Mzyvg%3d%3d"
+            wget -O win10.iso "https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso?t=54cc641a-0ea5-4070-a2f4-795901f1b8ce&P1=1789788927&P2=602&P3=2&P4=CwKZy%2fVdC62FHAxC8Mmp%2fs4YN4sJHaID3MGu%2bB6JqTtfiOVNkdWl1Hhek7pQ3P6eIb9qXCMOjjzv98uI59wYE1qjvS6AybBEaorC4Xg369wl5KHh%2bMTAPEWQKNBEo5ojR0c8%2b11mHn9%2fJJHt2DeNsNjVCMZrB%2f%2fVPcFjIUsOR8s6iUVGRB3WvWRcNB7I22kg2hkSeaZ7wetwIwWlGNsDMDtXi4kYO9ZqY4KMcqYy6w7O6b8Lmt3zXI5KqXS1Se%2fp6Avjpv2BFbWUMy43ljVjv%2f3z0r6EC2e9qerglKi%2fb8Tyk98nwOg3oCb2wYueItlnFa%2bKzVvVAjIa7nZpPHvqzw%3d%3d"
           fi
 
       - name: Launch QEMU Windows 10 (:1 - Port 5901)
